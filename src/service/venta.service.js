@@ -26,165 +26,121 @@ import {
  
 
 export async function crearVentaService(payload, tienda_id, usuario_id) {
-  // 1. VALIDACIÓN DE SEGURIDAD (tienda_id y usuario_id)
-  if (!tienda_id) {
-    throw { status: 401, message: 'ID de Tienda no proporcionado. Venta no autorizada.' };
-  }
-  if (!usuario_id) {
-    throw { status: 401, message: 'ID de Usuario no proporcionado. Venta no autorizada.' };
-  }
-  
-  // Eliminamos usuario_id de aquí, ya que se pasa como argumento
-  const {
-    items = [],
-    tipo_pago = 'contado',
-    cliente_id = null,
-    impuesto = 0,
-    abono_inicial = 0,
-    plazo_dias = null,
-    numero_abonos = null
-  } = payload;
+  if (!tienda_id) {
+    throw { status: 401, message: 'ID de Tienda no proporcionado. Venta no autorizada.' };
+  }
+  if (!usuario_id) {
+    throw { status: 401, message: 'ID de Usuario no proporcionado. Venta no autorizada.' };
+  }
 
-  // Validaciones iniciales
-  if (!Array.isArray(items) || items.length === 0)
-    throw {
-      status: 400,
-      message: 'No hay items en la venta'
-    };
+  const {
+    items = [],
+    tipo_pago = 'contado',
+    cliente_id = null,
+    impuesto = 0,
+    abono_inicial = 0,
+    plazo_dias = null,
+    numero_abonos = null
+  } = payload;
 
-  // Validaciones de Venta a Crédito (sin cambios)
-  if (tipo_pago === 'credito') {
-    if (!cliente_id) throw {
-      status: 400,
-      message: 'Se requiere un cliente para ventas a crédito'
-    };
-    if (!plazo_dias || plazo_dias <= 0) throw {
-      status: 400,
-      message: 'Se debe especificar el plazo de crédito en días'
-    };
-    if (!numero_abonos || numero_abonos <= 0) throw {
-      status: 400,
-      message: 'Se debe especificar el número de abonos'
-    };
-  }
+  if (!Array.isArray(items) || items.length === 0) {
+    throw { status: 400, message: 'No hay items en la venta' };
+  }
 
-  return await sequelize.transaction(async (t) => {
-    let subtotal = 0,
-      costo_total = 0,
-      utilidad_total = 0;
-    const detalles = [];
+  if (tipo_pago === 'credito') {
+    if (!cliente_id) throw { status: 400, message: 'Se requiere un cliente para ventas a crédito' };
+    if (!plazo_dias || plazo_dias <= 0) throw { status: 400, message: 'Se debe especificar el plazo de crédito en días' };
+    if (!numero_abonos || numero_abonos <= 0) throw { status: 400, message: 'Se debe especificar el número de abonos' };
+  }
 
-    // --- 2. Validación de Productos y Cálculo de Totales ---
-    for (const it of items) {
-      const producto = await Producto.findByPk(it.producto_id, {
-        transaction: t
-      });
-      
-      if (!producto) throw {
-        status: 404,
-        message: `Producto ID ${it.producto_id} no encontrado`
-      };
-      if (producto.stock < it.cantidad) throw {
-        status: 400,
-        message: `Stock insuficiente para ${producto.nombre}`
-      };
+  return await sequelize.transaction(async (t) => {
+    let subtotal = 0, costo_total = 0, utilidad_total = 0;
+    const detalles = [];
 
-      const precio_unitario = Number(it.precio_unitario ?? producto.precio_venta);
-      const subtotal_item = Number((precio_unitario * it.cantidad).toFixed(2));
-      const costo_item = Number((producto.precio_compra * it.cantidad).toFixed(2));
-      const utilidad_real = subtotal_item - costo_item;
+    // --- 1. Validación de Productos con LOCK y Cálculo de Totales ---
+    for (const it of items) {
+      // Bloquea la fila del producto en la tienda para evitar race condition
+      const producto = await Producto.findOne({
+        where: { id: it.producto_id, tienda_id },
+        transaction: t,
+        lock: t.LOCK.UPDATE
+      });
 
-      subtotal += subtotal_item;
-      costo_total += costo_item;
-      utilidad_total += utilidad_real;
+      if (!producto) throw { status: 404, message: `Producto ID ${it.producto_id} no encontrado` };
+      if (producto.stock < it.cantidad) throw { status: 400, message: `Stock insuficiente para ${producto.nombre}` };
 
-      detalles.push({
-        producto,
-        cantidad: it.cantidad,
-        precio_unitario,
-        subtotal_item,
-        costo_item,
-        utilidad_real
-      });
-    }
+      const precio_unitario = Number(it.precio_unitario ?? producto.precio_venta);
+      const subtotal_item = Number((precio_unitario * it.cantidad).toFixed(2));
+      const costo_item = Number((producto.precio_compra * it.cantidad).toFixed(2));
+      const utilidad_real = subtotal_item - costo_item;
 
-    const impuesto_num = Number(impuesto || 0);
-    const total = Number((subtotal + impuesto_num).toFixed(2));
+      subtotal += subtotal_item;
+      costo_total += costo_item;
+      utilidad_total += utilidad_real;
 
-    // --- 3. Creación de la Venta (Venta requiere tienda_id y usuario_id) ---
-    const venta = await Venta.create({
-      cliente_id,
-      tienda_id, 
-      subtotal,
-      total,
-      impuesto: impuesto_num,
-      tipo_pago,
-      estado: tipo_pago === 'contado' ? 'pagado' : 'pendiente',
-      saldo_pendiente: tipo_pago === 'contado' ? 0 : total,
-      utilidad_total,
-      fecha: new Date(),
-      usuario_id, 
-      plazo_dias,
-      numero_abonos
-    }, {
-      transaction: t
-    });
+      detalles.push({ producto, cantidad: it.cantidad, precio_unitario, subtotal_item, costo_item, utilidad_real });
+    }
 
-    // --- 4. Creación de DetalleVenta (DetalleVenta requiere tienda_id) ---
-    for (const d of detalles) {
-      await DetalleVenta.create({
-        venta_id: venta.id,
-        producto_id: d.producto.id,
-        cantidad: d.cantidad,
-        precio_unitario: d.precio_unitario,
-        subtotal: d.subtotal_item,
-        costo_unitario: d.producto.precio_compra,
-        utilidad_real: d.utilidad_real,
-        tienda_id: tienda_id 
-      }, {
-        transaction: t
-      });
+    const impuesto_num = Number(impuesto || 0);
+    const total = Number((subtotal + impuesto_num).toFixed(2));
 
-      d.producto.stock -= d.cantidad;
-      await d.producto.save({
-        transaction: t
-      });
-    }
+    // --- 2. Crear la Venta ---
+    const venta = await Venta.create({
+      cliente_id,
+      tienda_id,
+      subtotal,
+      total,
+      impuesto: impuesto_num,
+      tipo_pago,
+      estado: tipo_pago === 'contado' ? 'pagado' : 'pendiente',
+      saldo_pendiente: tipo_pago === 'contado' ? 0 : total,
+      utilidad_total,
+      fecha: new Date(),
+      usuario_id,
+      plazo_dias,
+      numero_abonos
+    }, { transaction: t });
 
-    // --- 5. Manejo de Abono Inicial (Abono requiere tienda_id) ---
-    if (tipo_pago === 'credito' && Number(abono_inicial) > 0) {
-      const montoNum = Number(abono_inicial);
-      if (montoNum > venta.saldo_pendiente)
-        throw {
-          status: 400,
-          message: 'El abono inicial excede el saldo'
-        };
+    // --- 3. Crear DetalleVenta y descontar stock ---
+    for (const d of detalles) {
+      await DetalleVenta.create({
+        venta_id: venta.id,
+        producto_id: d.producto.id,
+        cantidad: d.cantidad,
+        precio_unitario: d.precio_unitario,
+        subtotal: d.subtotal_item,
+        costo_unitario: d.producto.precio_compra,
+        utilidad_real: d.utilidad_real,
+        tienda_id
+      }, { transaction: t });
 
-      const nuevoSaldo = Number((venta.saldo_pendiente - montoNum).toFixed(2));
-      await Abono.create({
-        venta_id: venta.id,
-        monto: montoNum,
-        usuario_id, 
-        fecha: new Date(),
-        tienda_id // 💡 CORRECCIÓN: Se añade tienda_id al Abono
-      }, {
-        transaction: t
-      });
+      d.producto.stock -= d.cantidad;
+      await d.producto.save({ transaction: t });
+    }
 
-      venta.saldo_pendiente = nuevoSaldo;
-      if (nuevoSaldo === 0) venta.estado = 'pagado';
-      await venta.save({
-        transaction: t
-      });
-    }
+    // --- 4. Manejo de Abono Inicial ---
+    if (tipo_pago === 'credito' && Number(abono_inicial) > 0) {
+      const montoNum = Number(abono_inicial);
+      if (montoNum > venta.saldo_pendiente) throw { status: 400, message: 'El abono inicial excede el saldo' };
 
-    return {
-      success: true,
-      venta,
-      utilidad_total
-    };
-  });
+      const nuevoSaldo = Number((venta.saldo_pendiente - montoNum).toFixed(2));
+      await Abono.create({
+        venta_id: venta.id,
+        monto: montoNum,
+        usuario_id,
+        fecha: new Date(),
+        tienda_id
+      }, { transaction: t });
+
+      venta.saldo_pendiente = nuevoSaldo;
+      if (nuevoSaldo === 0) venta.estado = 'pagado';
+      await venta.save({ transaction: t });
+    }
+
+    return { success: true, venta, utilidad_total };
+  });
 }
+
 
 
 export async function listarVentasService(query = {}) {
@@ -307,9 +263,11 @@ export async function registrarAbonoService(ventaId, { monto, usuario_id }, tien
         
         // 2. Buscar Venta y Validaciones de Seguridad (usando tienda_id)
         const venta = await Venta.findOne({
-            where: { id: ventaId, tienda_id }, // Filtro de seguridad por tienda
-            transaction: t
-        });
+    where: { id: ventaId, tienda_id },
+    transaction: t,
+    lock: t.LOCK.UPDATE
+});
+
 
         if (!venta) 
             throw { status: 404, message: 'Venta no encontrada o no pertenece a la tienda' };
