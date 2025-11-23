@@ -47,10 +47,17 @@ export async function registerUsuarioService(userData) {
     } catch (error) {
 
         // ⚠️ Error por email o username repetido
-        if (error.name === "SequelizeUniqueConstraintError") {
-            const campo = error.errors?.[0]?.path || "campo";
-            throw new Error(`El ${campo} ya está registrado`);
-        }
+       if (error.name === "SequelizeUniqueConstraintError") {
+    const campo = error.errors?.[0]?.path || "campo";
+
+    let nombreCampo = "campo";
+
+    if (campo === "username") nombreCampo = "nombre de usuario";
+    else if (campo === "email") nombreCampo = "correo electrónico";
+
+    throw new Error(`El ${nombreCampo} ya está registrado`);
+}
+
 
         console.error("Error al crear usuario:", error);
         throw new Error("Ocurrió un error al registrar el usuario");
