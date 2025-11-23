@@ -14,43 +14,47 @@ const saltRounds = 10;
  */
 export async function registerUsuarioService(userData) {
     const { email, password, nombre, username } = userData;
-    
-    // Asumimos que las validaciones de datos (email, password, etc.) ya se han hecho.
 
-    return await sequelize.transaction(async (t) => {
-        
-        const passwordHash = await bcrypt.hash(password, 10);
+    try {
+        return await sequelize.transaction(async (t) => {
 
-        // 1. Crear el Usuario (dueño) inicialmente sin tienda_id.
-        // NOTA: Para que esto funcione, tienda_id en el modelo Usuario debe ser allowNull: true (como ya lo tienes).
-        const nuevoUsuario = await Usuario.create({
-            email,
-            nombre,
-            username,
-            passwordHash,
-            rol: 'admin', // El usuario inicial es siempre 'admin'
-            // tienda_id se deja como NULL por ahora
-        }, { transaction: t });
+            const passwordHash = await bcrypt.hash(password, 10);
 
-        // 2. Crear la Tienda y asociarla al nuevo Usuario.
-        // Asignamos el nombre de la tienda y, opcionalmente, podríamos usar el usuario_id en la Tienda si fuera necesario.
-        const nuevaTienda = await Tienda.create({
-            nombre: `${nombre}'s Tienda`,
+            // 1. Crear usuario
+            const nuevoUsuario = await Usuario.create({
+                email,
+                nombre,
+                username,
+                passwordHash,
+                rol: "admin",
+            }, { transaction: t });
 
-            // Puedes establecer otros valores predeterminados de la tienda aquí
-        }, { transaction: t });
-        
-        // 3. ACTUALIZAR: Asignar el ID de la Tienda al Usuario.
-        // Usamos el método update para modificar el registro de usuario creado en el paso 1.
-        await nuevoUsuario.update({ 
-            tienda_id: nuevaTienda.id 
-        }, { transaction: t });
+            // 2. Crear tienda
+            const nuevaTienda = await Tienda.create({
+                nombre: `${nombre}'s Tienda`,
+            }, { transaction: t });
 
-        // El objeto nuevoUsuario ahora tiene el tienda_id actualizado y es el que se retorna.
-        nuevoUsuario.tienda_id = nuevaTienda.id;
+            // 3. Actualizar usuario con tienda_id
+            await nuevoUsuario.update({
+                tienda_id: nuevaTienda.id
+            }, { transaction: t });
 
-        return nuevoUsuario;
-    });
+            nuevoUsuario.tienda_id = nuevaTienda.id;
+
+            return nuevoUsuario;
+        });
+
+    } catch (error) {
+
+        // ⚠️ Error por email o username repetido
+        if (error.name === "SequelizeUniqueConstraintError") {
+            const campo = error.errors?.[0]?.path || "campo";
+            throw new Error(`El ${campo} ya está registrado`);
+        }
+
+        console.error("Error al crear usuario:", error);
+        throw new Error("Ocurrió un error al registrar el usuario");
+    }
 }
 
 
