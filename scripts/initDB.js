@@ -32,9 +32,9 @@ async function populateData() {
   // 👉 Crear tienda inicial
   // =============================
   const [tienda, tiendaCreated] = await Tienda.findOrCreate({
-    where: { nombre: 'Tienda Principal' },
+    where: { nombre: 'Tienda Gilma' },
     defaults: {
-      descripcion: 'Tienda inicial del sistema',
+      descripcion: 'Tienda Gilma',
       telefono: '88888888',
       direccion: 'Nicaragua',
       moneda: 'NIO',
@@ -48,16 +48,16 @@ async function populateData() {
   // =============================
   // 👉 Crear usuarios asociados a la tienda
   // =============================
-  const adminPassword = await bcrypt.hash('admin', 10);
-  const userPassword = await bcrypt.hash('user', 10);
+  const adminPassword = await bcrypt.hash('12345', 10);
+  const userPassword = await bcrypt.hash('12345', 10);
 
   const [admin, adminCreated] = await Usuario.findOrCreate({
     where: { email: 'admin@admin.com' },
     defaults: {
-      nombre: 'Admin',
+      nombre: 'Carlos Admin',
       passwordHash: adminPassword,
       rol: 'admin',
-      username: 'admin',
+      username: 'Carlos',
       tienda_id: tienda.id
     }
   });
@@ -66,14 +66,17 @@ async function populateData() {
   const [user, userCreated] = await Usuario.findOrCreate({
     where: { email: 'user@user.com' },
     defaults: {
-      nombre: 'Usuario',
+      nombre: 'Gilma User',
       passwordHash: userPassword,
       rol: 'user',
-      username: 'user',
+      username: 'Gilma',
       tienda_id: tienda.id
     }
   });
   console.log(userCreated ? '🟢 Usuario normal creado' : '⚠️ Usuario normal ya existía');
+
+/**
+ * 
 
   // =============================
   // 👉 Clientes
@@ -170,6 +173,10 @@ async function populateData() {
   console.log('🟢 Productos insertados con tienda asignada');
 
   console.log('🎉 Base de datos inicializada correctamente');
+ */
+
+
+
 }
 
 async function init() {

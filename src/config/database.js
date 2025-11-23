@@ -5,7 +5,7 @@ dotenv.config();
 const sequelize = process.env.MYSQL_URL
   ? new Sequelize(process.env.MYSQL_URL, {
       dialect: "mysql",
-      timezone: process.env.TIMEZONE || "America/Managua",
+      timezone: "-06:00",
       logging: false,
     })
   : new Sequelize(
@@ -16,9 +16,10 @@ const sequelize = process.env.MYSQL_URL
         host: process.env.MYSQLHOST,
         dialect: "mysql",
         port: process.env.MYSQLPORT || 3306,
-        timezone: process.env.TIMEZONE || "America/Managua",
+        timezone: "-06:00",
         logging: false,
       }
     );
+
 
 export default sequelize;
