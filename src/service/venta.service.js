@@ -203,7 +203,8 @@ export async function eliminarVentaService(ventaId, tienda_id) {
 return await sequelize.transaction(async (t) => {
 const venta = await Venta.findOne({
 where: { id: ventaId, tienda_id },
-transaction: t
+transaction: t,
+  lock: t.LOCK.UPDATE
 });
 
 

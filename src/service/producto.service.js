@@ -83,19 +83,20 @@ export async function actualizarProductoService(id, payload, tienda_id) {
  */
  
 
-export async function listarProductosService(tienda_id) {
+export async function listarProductosService(tienda_id, page = 1, limit = 500) {
+  const offset = (page - 1) * limit;
+
   const productos = await Producto.findAll({
     where: { tienda_id },
-    order: [['id','ASC']],
+    order: [['id', 'ASC']],
     include: [
-      {
-        model: Talla,
-        as: 'talla',
-        attributes: ['id', 'nombre'] // Trae solo id y nombre de la talla
-      }
-    ]
+      { model: Talla, as: 'talla', attributes: ['id', 'nombre'] }
+    ],
+    limit,
+    offset
   });
 
-  return { success: true, productos };
+  return { success: true, productos, page, limit };
 }
+
 
