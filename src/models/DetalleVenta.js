@@ -9,6 +9,16 @@ const DetalleVenta = sequelize.define('DetalleVenta', {
   costo_unitario: { type: DataTypes.DECIMAL(12,2), allowNull: false }, // precio de compra al momento
   subtotal: { type: DataTypes.DECIMAL(12,2), allowNull: false },
   utilidad_real: { type: DataTypes.DECIMAL(12,2), allowNull: false }, // ganancia real por esta venta
+  descuento_item: {
+  type: DataTypes.DECIMAL(12,2),
+  allowNull: false,
+  defaultValue: 0
+},
+subtotal_final: {
+  type: DataTypes.DECIMAL(12,2),
+  allowNull: false,
+  defaultValue: 0
+},
   
   tienda_id: {                 
     type: DataTypes.INTEGER,

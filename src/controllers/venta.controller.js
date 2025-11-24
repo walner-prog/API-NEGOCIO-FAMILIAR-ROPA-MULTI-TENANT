@@ -24,6 +24,8 @@ export const crearVenta = async (req, res) => {
     // El payload (items, cliente_id, tipo_pago, etc.) viene en req.body
     const payload = { ...req.body };
 
+    
+
     // Se pasan tres argumentos: el cuerpo de la petición, el ID de la tienda y el ID del usuario.
     const result = await ventaService.crearVentaService(payload, tiendaId, usuarioId); 
     
@@ -67,7 +69,7 @@ export const registrarAbono = async (req, res) => {
  */
 export const listarVentas = async (req, res) => {
   try {
-    const query = { ...req.query, tienda_id: req.usuario.tienda_id } // filtro por tienda
+    const query = { ...req.query, tienda_id: req.query.tienda_id } // filtro por tienda
     const result = await ventaService.listarVentasService(query)
     res.json(result)
   } catch (error) {

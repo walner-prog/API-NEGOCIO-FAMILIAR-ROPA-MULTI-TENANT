@@ -40,12 +40,26 @@ export async function crearVentaService(payload, tienda_id, usuario_id) {
     impuesto = 0,
     abono_inicial = 0,
     plazo_dias = null,
-    numero_abonos = null
+    numero_abonos = null,
+    
+    // ⭐ Nuevos campos
+    descuento_general = 0,
+    motivo_descuento = null
   } = payload;
 
   if (!Array.isArray(items) || items.length === 0) {
     throw { status: 400, message: 'No hay items en la venta' };
   }
+
+  //  Validación: motivo obligatorio si hay descuento
+const hayDescuentos =
+  Number(descuento_general) > 0 ||
+  items.some(it => Number(it.descuento_item) > 0);
+
+if (hayDescuentos && !motivo_descuento) {
+  throw { status: 400, message: "El motivo del descuento es obligatorio" };
+}
+
 
   if (tipo_pago === 'credito') {
     if (!cliente_id) throw { status: 400, message: 'Se requiere un cliente para ventas a crédito' };
@@ -54,12 +68,15 @@ export async function crearVentaService(payload, tienda_id, usuario_id) {
   }
 
   return await sequelize.transaction(async (t) => {
+
     let subtotal = 0, costo_total = 0, utilidad_total = 0;
     const detalles = [];
 
-    // --- 1. Validación de Productos con LOCK y Cálculo de Totales ---
+    // =========================================================
+    // 1. Validación de productos + descuentos por item
+    // =========================================================
     for (const it of items) {
-      // Bloquea la fila del producto en la tienda para evitar race condition
+
       const producto = await Producto.findOne({
         where: { id: it.producto_id, tienda_id },
         transaction: t,
@@ -67,33 +84,72 @@ export async function crearVentaService(payload, tienda_id, usuario_id) {
       });
 
       if (!producto) throw { status: 404, message: `Producto ID ${it.producto_id} no encontrado` };
-      if (producto.stock < it.cantidad) throw { status: 400, message: `Stock insuficiente para ${producto.nombre}` };
+      if (producto.stock < it.cantidad)
+        throw { status: 400, message: `Stock insuficiente para ${producto.nombre}` };
 
       const precio_unitario = Number(it.precio_unitario ?? producto.precio_venta);
-      const subtotal_item = Number((precio_unitario * it.cantidad).toFixed(2));
-      const costo_item = Number((producto.precio_compra * it.cantidad).toFixed(2));
-      const utilidad_real = subtotal_item - costo_item;
 
-      subtotal += subtotal_item;
+      // ⭐ Descuento por item
+      const descuento_item = Number(it.descuento_item || 0);
+
+      const subtotal_bruto = Number((precio_unitario * it.cantidad).toFixed(2));
+      const subtotal_final = Number((subtotal_bruto - descuento_item).toFixed(2));
+
+      const costo_item = Number((producto.precio_compra * it.cantidad).toFixed(2));
+      const utilidad_real = subtotal_final - costo_item;
+
+      subtotal += subtotal_final;
       costo_total += costo_item;
       utilidad_total += utilidad_real;
 
-      detalles.push({ producto, cantidad: it.cantidad, precio_unitario, subtotal_item, costo_item, utilidad_real });
+      detalles.push({
+        producto,
+        cantidad: it.cantidad,
+        precio_unitario,
+        descuento_item,
+        subtotal_final,
+        costo_item,
+        utilidad_real
+      });
     }
 
-    const impuesto_num = Number(impuesto || 0);
-    const total = Number((subtotal + impuesto_num).toFixed(2));
+    // =========================================================
+    // 2. Aplicar descuento general
+    // =========================================================
+    const descGeneralNum = Number(descuento_general || 0);
 
-    // --- 2. Crear la Venta ---
+    if (descGeneralNum > subtotal) {
+      throw { status: 400, message: "El descuento general excede el subtotal" };
+    }
+
+    const subtotal_con_descuento_general = Number(
+      (subtotal - descGeneralNum).toFixed(2)
+    );
+
+    // =========================================================
+    // 3. Impuesto + total final
+    // =========================================================
+    const impuesto_num = Number(impuesto || 0);
+    const total_final = Number((subtotal_con_descuento_general + impuesto_num).toFixed(2));
+
+    // =========================================================
+    // 4. Crear Venta
+    // =========================================================
     const venta = await Venta.create({
       cliente_id,
       tienda_id,
-      subtotal,
-      total,
+
+      subtotal,                     // subtotal sin descuentos del item
+      descuento_general: descGeneralNum,
+      total: subtotal_con_descuento_general, // total SIN impuesto
       impuesto: impuesto_num,
+      total_final,                  // total + impuesto
+
+      motivo_descuento,
+
       tipo_pago,
       estado: tipo_pago === 'contado' ? 'pagado' : 'pendiente',
-      saldo_pendiente: tipo_pago === 'contado' ? 0 : total,
+      saldo_pendiente: tipo_pago === 'contado' ? 0 : total_final,
       utilidad_total,
       fecha: new Date(),
       usuario_id,
@@ -101,14 +157,17 @@ export async function crearVentaService(payload, tienda_id, usuario_id) {
       numero_abonos
     }, { transaction: t });
 
-    // --- 3. Crear DetalleVenta y descontar stock ---
+    // =========================================================
+    // 5. Crear DetalleVenta y bajar stock
+    // =========================================================
     for (const d of detalles) {
       await DetalleVenta.create({
         venta_id: venta.id,
         producto_id: d.producto.id,
         cantidad: d.cantidad,
         precio_unitario: d.precio_unitario,
-        subtotal: d.subtotal_item,
+        descuento_item: d.descuento_item,
+        subtotal: d.subtotal_final,      // ⭐ ahora guarda subtotal final
         costo_unitario: d.producto.precio_compra,
         utilidad_real: d.utilidad_real,
         tienda_id
@@ -118,12 +177,18 @@ export async function crearVentaService(payload, tienda_id, usuario_id) {
       await d.producto.save({ transaction: t });
     }
 
-    // --- 4. Manejo de Abono Inicial ---
+    // =========================================================
+    // 6. Abono inicial (si es crédito)
+    // =========================================================
     if (tipo_pago === 'credito' && Number(abono_inicial) > 0) {
+
       const montoNum = Number(abono_inicial);
-      if (montoNum > venta.saldo_pendiente) throw { status: 400, message: 'El abono inicial excede el saldo' };
+
+      if (montoNum > venta.saldo_pendiente)
+        throw { status: 400, message: 'El abono inicial excede el saldo' };
 
       const nuevoSaldo = Number((venta.saldo_pendiente - montoNum).toFixed(2));
+
       await Abono.create({
         venta_id: venta.id,
         monto: montoNum,
@@ -140,6 +205,7 @@ export async function crearVentaService(payload, tienda_id, usuario_id) {
     return { success: true, venta, utilidad_total };
   });
 }
+
 
 
 

@@ -14,6 +14,21 @@ const Venta = sequelize.define('Venta', {
   usuario_id: { type: DataTypes.INTEGER, allowNull: true },
   plazo_dias: { type: DataTypes.INTEGER, allowNull: true },       // ⬅ tiempo para pagar
   numero_abonos: { type: DataTypes.INTEGER, allowNull: true },    // ⬅ cantidad de pagos permitidos
+  descuento_general: {
+  type: DataTypes.DECIMAL(12,2),
+  allowNull: false,
+  defaultValue: 0
+},
+total_final: {
+  type: DataTypes.DECIMAL(12,2),
+  allowNull: false,
+  defaultValue: 0
+},
+motivo_descuento: {
+  type: DataTypes.STRING(255),
+  allowNull: true
+},
+
   
     tienda_id: {                 
       type: DataTypes.INTEGER,
