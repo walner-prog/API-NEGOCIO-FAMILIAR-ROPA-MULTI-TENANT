@@ -6,7 +6,7 @@ import Talla from '../models/Talla.js';
  * @param {Number} tienda_id - tienda del usuario logueado
  */
 export async function crearProductoService(data, tienda_id) {
-  let { codigo_barras, nombre, marca, precio_compra, precio_venta, stock, talla_id } = data;
+  let { codigo_barras, nombre, marca, precio_compra, precio_venta, stock,imagen_path, talla_id,} = data;
 
   // Generar código único si no se envía
  if (!codigo_barras || codigo_barras.trim() === '') {
@@ -21,16 +21,18 @@ export async function crearProductoService(data, tienda_id) {
   if (existe) throw { status: 409, message: 'Producto con ese código ya existe' };
 
   // Crear producto
-  const producto = await Producto.create({
-    codigo_barras,
-    nombre,
-    marca,
-    precio_compra,
-    precio_venta,
-    stock,
-    talla_id,
-    tienda_id
-  });
+ const producto = await Producto.create({
+  codigo_barras,
+  nombre,
+  marca,
+  precio_compra,
+  precio_venta,
+  stock,
+  talla_id,
+  tienda_id,
+  imagen_path: data.imagen_path ?? null
+});
+
  
   
   return { success: true, producto };

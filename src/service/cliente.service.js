@@ -74,92 +74,116 @@ export async function eliminarClienteService(id, tienda_id) {
  * @param {Object} query - { estado, desde, hasta, page, tienda_id }
  */
 export async function listarClientesCreditoService(query = {}) {
-  const { estado, desde, hasta, page = 1, tienda_id } = query;
-  const limit = 500;
-  const offset = (page - 1) * limit;
+  const { estado, desde, hasta, page = 1, tienda_id } = query;
+  const limit = 500;
+  const offset = (page - 1) * limit;
 
-  const fechaDesde = desde ? new Date(desde) : new Date(new Date().setHours(0,0,0,0));
-  const fechaHasta = hasta ? new Date(hasta) : new Date();
-  fechaHasta.setHours(23,59,59,999);
+  // ----------------------------------------------------
+  // 💡 CAMBIO CLAVE: Definir el objeto de filtro de fechas
+  // ----------------------------------------------------
+  let filtroFecha = {};
 
-  const ventasCredito = await Venta.findAll({
-    where: {
-      tipo_pago: 'credito',
-      tienda_id,
-      ...(estado && { estado }),
-      fecha: { [Op.between]: [fechaDesde, fechaHasta] }
-    },
-    include: [
-      { model: Cliente, as: 'cliente' },
-      { 
-        model: DetalleVenta, 
-        as: 'detalleVentas',
-        include: [
-          { model: Producto, as: 'producto', attributes: ['id','nombre','codigo_barras'] }
-        ]
-      },
-      { model: Abono, as: 'abonos' }
-    ],
-    order: [['fecha', 'DESC']],
-    limit,
-    offset
-  });
+  if (desde || hasta) {
+    const fechaDesde = desde ? new Date(desde) : null;
+      // Si hay 'hasta', la fecha final es el final de ese día. Si solo hay 'desde',
+      // se usa el final del día actual como límite superior por defecto.
+    const fechaHasta = hasta 
+      ? new Date(new Date(hasta).setHours(23, 59, 59, 999)) 
+      : new Date(new Date().setHours(23, 59, 59, 999));
 
-  const clientesMap = new Map();
-  let totalSaldoPendiente = 0;
+    if (fechaDesde && fechaHasta) {
+      filtroFecha = { [Op.between]: [fechaDesde, fechaHasta] };
+    } else if (fechaDesde) {
+      filtroFecha = { [Op.gte]: fechaDesde }; // Mayor o igual que 'desde'
+    } else if (fechaHasta) {
+      filtroFecha = { [Op.lte]: fechaHasta }; // Menor o igual que 'hasta'
+    }
+  }
+  // ----------------------------------------------------
 
-  for (const venta of ventasCredito) {
-    const clienteId = venta.cliente_id;
-    if (!clientesMap.has(clienteId)) {
-      clientesMap.set(clienteId, {
-        cliente_id: clienteId,
-        nombre: venta.cliente?.nombre || 'Sin nombre',
-        total_credito: 0,
-        ventas: []
-      });
-    }
+  const ventasCredito = await Venta.findAll({
+    where: {
+      tipo_pago: 'credito',
+      tienda_id,
+      ...(estado && { estado }),
+      // 💡 CAMBIO CLAVE: Aplicar el filtro de fecha solo si existe
+      ...(Object.keys(filtroFecha).length > 0 && { fecha: filtroFecha })
+      // O en caso de que siempre sea un rango, simplificar:
+      // ...((desde || hasta) && { fecha: { [Op.between]: [fechaDesde, fechaHasta] } })
+    },
+    include: [
+      { model: Cliente, as: 'cliente' },
+      { 
+        model: DetalleVenta, 
+        as: 'detalleVentas',
+        include: [
+          { model: Producto, as: 'producto', attributes: ['id','nombre','codigo_barras'] }
+        ]
+      },
+      { model: Abono, as: 'abonos' }
+    ],
+    order: [['fecha', 'DESC']],
+    limit,
+    offset
+  });
 
-    const clienteData = clientesMap.get(clienteId);
-    clienteData.ventas.push({
-      id: venta.id,
-      subtotal: parseFloat(venta.subtotal),
-      total: parseFloat(venta.total),
-      saldo_pendiente: parseFloat(venta.saldo_pendiente),
-      estado: venta.estado,
-      fecha: venta.fecha,
-      plazo_dias: venta.plazo_dias,
-      numero_abonos: venta.numero_abonos,
-      detalles: venta.detalleVentas.map(d => ({
-        producto_id: d.producto_id,
-        nombre_producto: d.producto?.nombre || '',
-        codigo_barras: d.producto?.codigo_barras || '',
-        cantidad: d.cantidad,
-        precio_unitario: parseFloat(d.precio_unitario),
-        costo_unitario: parseFloat(d.costo_unitario),
-        subtotal: parseFloat(d.subtotal),
-        utilidad_real: parseFloat(d.utilidad_real)
-      })),
-      abonos: venta.abonos.map(a => ({
-        id: a.id,
-        monto: parseFloat(a.monto),
-        usuario_id: a.usuario_id,
-        fecha: a.fecha
-      }))
-    });
+  // ... (el resto del código de mapeo de clientes es correcto y se mantiene igual)
 
-    clienteData.total_credito += parseFloat(venta.saldo_pendiente);
-    totalSaldoPendiente += parseFloat(venta.saldo_pendiente);
-  }
+  const clientesMap = new Map();
+  let totalSaldoPendiente = 0;
 
-  const clientes = Array.from(clientesMap.values());
-  const totalClientes = clientes.length;
+  for (const venta of ventasCredito) {
+    const clienteId = venta.cliente_id;
+    if (!clientesMap.has(clienteId)) {
+      clientesMap.set(clienteId, {
+        cliente_id: clienteId,
+        nombre: venta.cliente?.nombre || 'Sin nombre',
+        total_credito: 0,
+        ventas: []
+      });
+    }
 
-  return {
-    success: true,
-    clientes,
-    totalClientes,
-    totalSaldoPendiente
-  };
+    const clienteData = clientesMap.get(clienteId);
+    clienteData.ventas.push({
+      id: venta.id,
+      subtotal: parseFloat(venta.subtotal),
+      total: parseFloat(venta.total),
+      saldo_pendiente: parseFloat(venta.saldo_pendiente),
+      estado: venta.estado,
+      fecha: venta.fecha,
+      plazo_dias: venta.plazo_dias,
+      numero_abonos: venta.numero_abonos,
+      detalles: venta.detalleVentas.map(d => ({
+        producto_id: d.producto_id,
+        nombre_producto: d.producto?.nombre || '',
+        codigo_barras: d.producto?.codigo_barras || '',
+        cantidad: d.cantidad,
+        precio_unitario: parseFloat(d.precio_unitario),
+        costo_unitario: parseFloat(d.costo_unitario),
+        subtotal: parseFloat(d.subtotal),
+        utilidad_real: parseFloat(d.utilidad_real)
+      })),
+      abonos: venta.abonos.map(a => ({
+        id: a.id,
+        monto: parseFloat(a.monto),
+        usuario_id: a.usuario_id,
+        fecha: a.fecha
+      }))
+    });
+
+    clienteData.total_credito += parseFloat(venta.saldo_pendiente);
+    totalSaldoPendiente += parseFloat(venta.saldo_pendiente);
+  }
+
+  const clientes = Array.from(clientesMap.values());
+  const totalClientes = clientes.length;
+
+  return {
+    success: true,
+    clientes,
+    totalClientes,
+    totalSaldoPendiente
+  };
 }
 
 

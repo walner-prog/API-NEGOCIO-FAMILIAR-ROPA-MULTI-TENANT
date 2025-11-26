@@ -13,6 +13,9 @@ import clienteRoutes from './src/routes/cliente.routes.js'
 import  reporteRoutes  from './src/routes/reporte.routes.js'
 import  tiendaRoutes  from './src/routes/tienda.routes.js'
 import  tallaRoutes  from './src/routes/talla.routes.js'
+import uploadRoutes from "./src/routes/uploadRoutes.js";
+
+
 
 dotenv.config()
 
@@ -31,6 +34,7 @@ app.use('/api/clientes', clienteRoutes)
 app.use('/api/reportes', reporteRoutes)
 app.use('/api/tiendas', tiendaRoutes)
 app.use('/api/tallas', tallaRoutes)
+app.use("/api/upload", uploadRoutes);
 
  
 

@@ -10,6 +10,7 @@ const Producto = sequelize.define('Producto', {
   unidad: { type: DataTypes.STRING(20), allowNull: true },
   marca: { type: DataTypes.STRING(100), allowNull: true },
   talla_id: { type: DataTypes.INTEGER, allowNull: true },
+  imagen_path: { type: DataTypes.STRING(500), allowNull: true },
 
   utilidad: { type: DataTypes.DECIMAL(12,2), allowNull: false, defaultValue: 0 },
   
