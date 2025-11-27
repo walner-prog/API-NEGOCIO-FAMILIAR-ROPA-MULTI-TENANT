@@ -1,4 +1,6 @@
 import Producto from '../models/Producto.js';
+ 
+import DetalleVenta from '../models/DetalleVenta.js';
 import Talla from '../models/Talla.js';
 /**
  * Crear producto
@@ -102,3 +104,25 @@ export async function listarProductosService(tienda_id, page = 1, limit = 500) {
 }
 
 
+export async function eliminarProducto(id) {
+  // Buscar el producto
+  const producto = await Producto.findByPk(id);
+  if (!producto) {
+    throw { status: 404, message: 'Producto no encontrado' };
+  }
+
+  // Verificar si el producto tiene ventas asociadas
+  const detalleCount = await DetalleVenta.count({ where: { producto_id: id } });
+
+  if (detalleCount > 0) {
+    throw { 
+      status: 400, 
+      message: 'No se puede eliminar el producto porque está asociado a una venta' 
+    };
+  }
+
+  // Eliminar si no tiene ventas
+  await producto.destroy();
+
+  return { success: true, message: 'Producto eliminado correctamente' };
+}

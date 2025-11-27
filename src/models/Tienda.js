@@ -39,10 +39,23 @@ const Tienda = sequelize.define('Tienda', {
     defaultValue: false
   },
 
+   fecha_inicio_suscripcion: {
+  type: DataTypes.DATE,
+  allowNull: true
+},
+
   fecha_renovacion: {
     type: DataTypes.DATE,
     allowNull: true
-  }
+  },
+ 
+
+  codigo_unico: {
+  type: DataTypes.STRING(20),
+  allowNull: false,
+  unique: true
+},
+
 
 }, {
   tableName: 'tiendas',

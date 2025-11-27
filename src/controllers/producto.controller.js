@@ -36,3 +36,16 @@ export const actualizarProducto = async (req, res) => {
     res.status(error.status || 500).json({ success: false, message: error.message || 'Error interno' });
   }
 };
+
+/**
+ * Eliminar producto
+ */
+export const eliminarProducto = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const result = await productoService.eliminarProducto(id);
+    res.json(result);
+  } catch (error) {
+    res.status(error.status || 500).json({ success: false, message: error.message || 'Error interno' });
+  }
+};

@@ -13,6 +13,25 @@ export const crearCliente = async (req, res) => {
 };
 
 
+export const editarCliente = async (req, res) => {
+  try {
+    const result = await clienteService.editarClienteService(
+      req.params.id,
+      req.body,
+      req.usuario.tienda_id
+    );
+
+    res.json(result);
+  } catch (error) {
+    res.status(error.status || 500).json({
+      success: false,
+      message: error.message || "Error interno"
+    });
+  }
+};
+
+
+
 /**
  * Listar todos los clientes de la tienda
  */

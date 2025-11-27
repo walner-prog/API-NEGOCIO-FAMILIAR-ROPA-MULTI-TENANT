@@ -3,6 +3,7 @@ import express from 'express'
 import dotenv from 'dotenv'
 import cors from 'cors'
 import sequelize from './src/config/database.js'
+import "./src/cron/desactivarSuscripcionesCron.js";
 
 // RUTAS
 import usuarioRoutes from './src/routes/usuario.routes.js'
@@ -14,6 +15,7 @@ import  reporteRoutes  from './src/routes/reporte.routes.js'
 import  tiendaRoutes  from './src/routes/tienda.routes.js'
 import  tallaRoutes  from './src/routes/talla.routes.js'
 import uploadRoutes from "./src/routes/uploadRoutes.js";
+import suscripcionRoutes from "./src/routes/suscripcion.Routes.js";
 
 
 
@@ -35,6 +37,7 @@ app.use('/api/reportes', reporteRoutes)
 app.use('/api/tiendas', tiendaRoutes)
 app.use('/api/tallas', tallaRoutes)
 app.use("/api/upload", uploadRoutes);
+app.use("/api/suscripciones", suscripcionRoutes);
 
  
 

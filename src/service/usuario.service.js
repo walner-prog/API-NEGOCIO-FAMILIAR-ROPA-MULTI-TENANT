@@ -12,6 +12,28 @@ const saltRounds = 10;
  * Registrar usuario y crear tienda automáticamente
  * @param {Object} datos - email, username, password, nombre, rol
  */
+
+export function generarCodigoUnico() {
+  // Genera 10 caracteres aleatorios (0-9 y A-Z)
+  const random = Math.random().toString(36).substring(2, 12).toUpperCase();
+  return `TND-${random}`;
+}
+
+
+
+export async function generarCodigoUnicoSeguro() {
+  let codigo = "";
+  let existe = true;
+
+  while (existe) {
+    codigo = generarCodigoUnico();
+    existe = await Tienda.findOne({ where: { codigo_unico: codigo } });
+  }
+
+  return codigo;
+}
+
+
 export async function registerUsuarioService(userData) {
     const { email, password, nombre, username } = userData;
 
@@ -29,12 +51,26 @@ export async function registerUsuarioService(userData) {
                 rol: "admin",
             }, { transaction: t });
 
-            // 2. Crear tienda
+            // -----------------------------------------
+            // 🆕 2. Generar fechas para el plan inicial
+            // -----------------------------------------
+            const hoy = new Date();
+            const fechaRenovacion = new Date();
+            fechaRenovacion.setDate(hoy.getDate() + 30);
+
+            // 3. Crear tienda con código y suscripción premium inicial
             const nuevaTienda = await Tienda.create({
                 nombre: `${nombre}'s Tienda`,
+                codigo_unico: await generarCodigoUnicoSeguro(),
+
+                // 🟢 PLAN PREMIUM AUTOMÁTICO POR 30 DÍAS
+                plan: "premium",
+                suscripcion_activa: true,
+                fecha_inicio_suscripcion: hoy,
+                fecha_renovacion: fechaRenovacion,
             }, { transaction: t });
 
-            // 3. Actualizar usuario con tienda_id
+            // 4. Relacionar usuario con tienda
             await nuevoUsuario.update({
                 tienda_id: nuevaTienda.id
             }, { transaction: t });
@@ -46,23 +82,22 @@ export async function registerUsuarioService(userData) {
 
     } catch (error) {
 
-        // ⚠️ Error por email o username repetido
-       if (error.name === "SequelizeUniqueConstraintError") {
-    const campo = error.errors?.[0]?.path || "campo";
+        if (error.name === "SequelizeUniqueConstraintError") {
+            const campo = error.errors?.[0]?.path || "campo";
 
-    let nombreCampo = "campo";
+            let nombreCampo = "campo";
+            if (campo === "username") nombreCampo = "nombre de usuario";
+            else if (campo === "email") nombreCampo = "correo electrónico";
 
-    if (campo === "username") nombreCampo = "nombre de usuario";
-    else if (campo === "email") nombreCampo = "correo electrónico";
-
-    throw new Error(`El ${nombreCampo} ya está registrado`);
-}
-
+            throw new Error(`El ${nombreCampo} ya está registrado`);
+        }
 
         console.error("Error al crear usuario:", error);
         throw new Error("Ocurrió un error al registrar el usuario");
     }
 }
+
+
 
 
 // Crear usuario adicional para una tienda existente

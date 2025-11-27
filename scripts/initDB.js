@@ -8,6 +8,16 @@ import { sequelize, Cliente, Producto } from '../src/models/index.js';
 import Usuario from '../src/models/Usuario.js';
 import Tienda from '../src/models/Tienda.js';
 
+// 👉 Generador de código único
+function generarCodigoUnico(length = 10) {
+  const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+  let code = "";
+  for (let i = 0; i < length; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
 async function createDatabase() {
   const { MYSQLHOST, MYSQLPORT, MYSQLUSER, MYSQLPASSWORD, MYSQLDATABASE } = process.env;
 
@@ -31,6 +41,9 @@ async function populateData() {
   // =============================
   // 👉 Crear tienda inicial
   // =============================
+
+  const codigo_unico = generarCodigoUnico();
+
   const [tienda, tiendaCreated] = await Tienda.findOrCreate({
     where: { nombre: 'Tienda Gilma' },
     defaults: {
@@ -40,10 +53,20 @@ async function populateData() {
       moneda: 'NIO',
       plan: 'free',
       estado: true,
-      suscripcion_activa: true
+      suscripcion_activa: false,
+
+      // 🆕 Nuevos campos
+      codigo_unico,
+      fecha_inicio_suscripcion: null,
+      fecha_renovacion: null,
     }
   });
-  console.log(tiendaCreated ? '🟢 Tienda creada' : '⚠️ Tienda ya existía');
+
+  console.log(
+    tiendaCreated
+      ? `🟢 Tienda creada (código único: ${codigo_unico})`
+      : '⚠️ Tienda ya existía'
+  );
 
   // =============================
   // 👉 Crear usuarios asociados a la tienda
@@ -61,6 +84,7 @@ async function populateData() {
       tienda_id: tienda.id
     }
   });
+
   console.log(adminCreated ? '🟢 Usuario admin creado' : '⚠️ Usuario admin ya existía');
 
   const [user, userCreated] = await Usuario.findOrCreate({
@@ -73,7 +97,32 @@ async function populateData() {
       tienda_id: tienda.id
     }
   });
+
   console.log(userCreated ? '🟢 Usuario normal creado' : '⚠️ Usuario normal ya existía');
+
+}
+
+async function init() {
+  try {
+    await createDatabase();
+
+    await sequelize.authenticate();
+    console.log('🔗 Conexión establecida con Sequelize');
+
+    // 👇 Sincroniza todos los modelos con fuerza (solo para desarrollo)
+    await sequelize.sync({ force: true });
+    console.log('🛠️ Tablas sincronizadas');
+
+    await populateData();
+  } catch (err) {
+    console.error('❌ Error inicializando BD:', err);
+  } finally {
+    process.exit(0);
+  }
+}
+
+init();
+
 
 /**
  * 
@@ -175,27 +224,3 @@ async function populateData() {
   console.log('🎉 Base de datos inicializada correctamente');
  */
 
-
-
-}
-
-async function init() {
-  try {
-    await createDatabase();
-
-    await sequelize.authenticate();
-    console.log('🔗 Conexión establecida con Sequelize');
-
-    // 👇 Sincroniza todos los modelos con fuerza (solo para desarrollo)
-    await sequelize.sync({ force: true });
-    console.log('🛠️ Tablas sincronizadas');
-
-    await populateData();
-  } catch (err) {
-    console.error('❌ Error inicializando BD:', err);
-  } finally {
-    process.exit(0);
-  }
-}
-
-init();

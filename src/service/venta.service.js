@@ -24,7 +24,6 @@ import {
  }
 */
  
-
 export async function crearVentaService(payload, tienda_id, usuario_id) {
   if (!tienda_id) {
     throw { status: 401, message: 'ID de Tienda no proporcionado. Venta no autorizada.' };
@@ -41,7 +40,7 @@ export async function crearVentaService(payload, tienda_id, usuario_id) {
     abono_inicial = 0,
     plazo_dias = null,
     numero_abonos = null,
-    
+
     // ⭐ Nuevos campos
     descuento_general = 0,
     motivo_descuento = null
@@ -52,14 +51,13 @@ export async function crearVentaService(payload, tienda_id, usuario_id) {
   }
 
   //  Validación: motivo obligatorio si hay descuento
-const hayDescuentos =
-  Number(descuento_general) > 0 ||
-  items.some(it => Number(it.descuento_item) > 0);
+  const hayDescuentos =
+    Number(descuento_general) > 0 ||
+    items.some(it => Number(it.descuento_item) > 0);
 
-if (hayDescuentos && !motivo_descuento) {
-  throw { status: 400, message: "El motivo del descuento es obligatorio" };
-}
-
+  if (hayDescuentos && !motivo_descuento) {
+    throw { status: 400, message: "El motivo del descuento es obligatorio" };
+  }
 
   if (tipo_pago === 'credito') {
     if (!cliente_id) throw { status: 400, message: 'Se requiere un cliente para ventas a crédito' };
@@ -88,8 +86,6 @@ if (hayDescuentos && !motivo_descuento) {
         throw { status: 400, message: `Stock insuficiente para ${producto.nombre}` };
 
       const precio_unitario = Number(it.precio_unitario ?? producto.precio_venta);
-
-      // ⭐ Descuento por item
       const descuento_item = Number(it.descuento_item || 0);
 
       const subtotal_bruto = Number((precio_unitario * it.cantidad).toFixed(2));
@@ -139,11 +135,11 @@ if (hayDescuentos && !motivo_descuento) {
       cliente_id,
       tienda_id,
 
-      subtotal,                     // subtotal sin descuentos del item
+      subtotal,
       descuento_general: descGeneralNum,
-      total: subtotal_con_descuento_general, // total SIN impuesto
+      total: subtotal_con_descuento_general, 
       impuesto: impuesto_num,
-      total_final,                  // total + impuesto
+      total_final,
 
       motivo_descuento,
 
@@ -167,7 +163,7 @@ if (hayDescuentos && !motivo_descuento) {
         cantidad: d.cantidad,
         precio_unitario: d.precio_unitario,
         descuento_item: d.descuento_item,
-        subtotal: d.subtotal_final,      // ⭐ ahora guarda subtotal final
+        subtotal: d.subtotal_final,
         costo_unitario: d.producto.precio_compra,
         utilidad_real: d.utilidad_real,
         tienda_id
@@ -202,9 +198,31 @@ if (hayDescuentos && !motivo_descuento) {
       await venta.save({ transaction: t });
     }
 
-    return { success: true, venta, utilidad_total };
+    // =========================================================
+    // 7. Volver a consultar la venta COMPLETA
+    // =========================================================
+    const ventaCompleta = await Venta.findByPk(venta.id, {
+      include: [
+        { model: Cliente, as: 'cliente' },
+        {
+          model: DetalleVenta,
+          as: 'detalleVentas',
+          include: [
+            { model: Producto, as: 'producto' }
+          ]
+        }
+      ],
+      transaction: t
+    });
+
+    return {
+      success: true,
+      venta: ventaCompleta,
+      utilidad_total
+    };
   });
 }
+
 
 
 
