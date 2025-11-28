@@ -2,51 +2,82 @@ import { supabase } from "../utils/supabase.js";
 
 export async function uploadImage(req, res) {
   try {
+    console.log("=== SUBIDA DE IMAGEN INICIADA ===");
+
+    // Archivo recibido
+    console.log("Archivo recibido (req.file):", req.file ? {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size
+    } : "NO FILE");
+
     if (!req.file) {
+      console.log("❌ No se envió imagen");
       return res.status(400).json({ message: "No se envió imagen" });
     }
 
+    // Usuario y tienda
+    console.log("Usuario autenticado:", req.usuario);
     const tienda_id = req.usuario.tienda_id; 
+    console.log("Tienda ID:", tienda_id);
 
-    // Ruta de la imagen nueva
+    // Construir path
     const ext = req.file.originalname.split(".").pop();
     const filePath = `products/${tienda_id}/${Date.now()}.${ext}`;
+    console.log("Path generado para guardar:", filePath);
 
-    // ⭐ Eliminar imagen anterior si viene en req.body.old_path
+    // ---------------------------------------------------------------------
+    // ELIMINAR IMAGEN ANTERIOR
+    // ---------------------------------------------------------------------
+    console.log("old_path recibido:", req.body.old_path);
+
     if (req.body.old_path) {
-      const { error: deleteError } = await supabase.storage
+      console.log("Intentando eliminar imagen anterior...");
+
+      const { data: deleteData, error: deleteError } = await supabase.storage
         .from("files")
         .remove([req.body.old_path]);
+
+      console.log("Resultado delete:", { deleteData, deleteError });
+
       if (deleteError) {
-        console.warn("No se pudo eliminar la imagen anterior:", deleteError.message);
+        console.warn("⚠️ No se pudo eliminar la imagen anterior:", deleteError);
       }
     }
 
-    console.log("old_path recibido:", req.body.old_path)
+    // ---------------------------------------------------------------------
+    // SUBIR IMAGEN NUEVA
+    // ---------------------------------------------------------------------
+    console.log("Subiendo imagen a Supabase...");
 
+    const { data: uploadData, error: uploadError } = await supabase.storage
+      .from("files")
+      .upload(filePath, req.file.buffer, {
+        contentType: req.file.mimetype,
+        cacheControl: "3600",
+      });
 
-   // console.log("eliminando imagen en Supabase en path:", req.body.old_path);
+    console.log("Resultado upload:", { uploadData, uploadError });
 
-    // Subir imagen nueva
-   const { error } = await supabase.storage
-  .from("files")
-  .upload(filePath, req.file.buffer, {
-    contentType: req.file.mimetype,
-    cacheControl: "3600",
-  });
+    if (uploadError) {
+      console.error("❌ Error al subir archivo a Supabase:", uploadError);
+      throw uploadError;
+    }
 
-
-    if (error) throw error;
+    console.log("✔️ Imagen subida correctamente:", filePath);
 
     return res.json({
       success: true,
-      path: filePath, // este path se guarda en tu DB
+      path: filePath,
+      supabaseResponse: uploadData,
     });
 
-    
-
   } catch (err) {
-    console.error(err);
-    return res.status(500).json({ message: "Error al subir imagen", error: err.message });
+    console.error("❌ ERROR EN SUBIDA:", err);
+    return res.status(500).json({
+      message: "Error al subir imagen",
+      error: err.message,
+      fullError: err, // para debug real
+    });
   }
 }
