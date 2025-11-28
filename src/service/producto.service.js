@@ -22,6 +22,8 @@ export async function crearProductoService(data, tienda_id) {
   const existe = await Producto.findOne({ where: { codigo_barras, tienda_id } });
   if (existe) throw { status: 409, message: 'Producto con ese código ya existe' };
 
+  console.log("imagen_path en crearProductoService:", imagen_path);
+  console.log("tienda_id en crearProductoService:", data);
   // Crear producto
  const producto = await Producto.create({
   codigo_barras,
