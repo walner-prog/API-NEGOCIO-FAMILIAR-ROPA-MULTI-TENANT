@@ -24,7 +24,7 @@ export async function validarSuscripcion(req, res, next) {
     req.suscripcion = {
       activa: tienda.suscripcion_activa && !suscripcionVencida,
       plan: tienda.plan,
-      limiteProductos: tienda.plan === 'free' ? 1 : Infinity, // ejemplo de límite
+      limiteProductos: tienda.plan === 'free' ? 50 : Infinity, // ejemplo de límite
       mostrarReportes: tienda.plan !== 'free', // ocultar reportes si plan free
     };
 

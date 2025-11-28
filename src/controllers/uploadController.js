@@ -22,15 +22,19 @@ export async function uploadImage(req, res) {
       }
     }
 
+    console.log("old_path recibido:", req.body.old_path)
+
+
    // console.log("eliminando imagen en Supabase en path:", req.body.old_path);
 
     // Subir imagen nueva
-    const { error } = await supabase.storage
-      .from("files")
-      .upload(filePath, req.file.buffer, {
-        contentType: req.file.mimetype,
-        upsert: true,
-      });
+   const { error } = await supabase.storage
+  .from("files")
+  .upload(filePath, req.file.buffer, {
+    contentType: req.file.mimetype,
+    cacheControl: "3600",
+  });
+
 
     if (error) throw error;
 
@@ -38,6 +42,8 @@ export async function uploadImage(req, res) {
       success: true,
       path: filePath, // este path se guarda en tu DB
     });
+
+    
 
   } catch (err) {
     console.error(err);
