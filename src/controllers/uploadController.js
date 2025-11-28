@@ -3,6 +3,11 @@ import { supabase } from "../utils/supabase.js";
 export async function uploadImage(req, res) {
   try {
     console.log("=== SUBIDA DE IMAGEN INICIADA ===");
+    console.log("📥 Archivo recibido en req.file:", req.file ? "SÍ" : "NO");
+console.log("📥 req.body.old_path:", req.body.old_path);
+console.log("📥 req.headers content-type:", req.headers["content-type"]);
+console.log("📥 Tamaño de imagen buffer:", req.file?.buffer?.length);
+
 
     // Archivo recibido
     console.log("Archivo recibido (req.file):", req.file ? {
